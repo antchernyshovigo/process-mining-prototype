@@ -1,45 +1,48 @@
 # 🚀 Process Mining Prototype
 
-Прототип системы анализа процессов (process mining), который позволяет:
+**Build your own Celonis-like system in Python**
 
-- 📥 загружать event log (CSV / Excel)
-- ⚙️ автоматически нормализовать данные
-- 📊 строить process graph (DFG)
-- 🔍 анализировать variants
-- ⏱ находить bottlenecks
-- 📈 смотреть summary метрики
+This project is a prototype of a process mining platform that allows you to reconstruct and analyze real business processes from event logs.
 
 ---
 
-## 🏗 Архитектура
+## 🎯 What is it?
 
+A lightweight process mining system that lets you:
+
+- 📥 Upload event logs (CSV / Excel)
+- 🔄 Reconstruct real process flows
+- 🔍 Analyze process variants
+- ⏱ Detect bottlenecks
+- 📊 Visualize processes interactively
 
 ---
 
-## ▶️ Быстрый старт
+## ⚡ How it works (demo)
 
-### 1️⃣ Запуск Backend (FastAPI)
+1. Upload CSV with event log  
+2. Map columns:
+   - `case_id`
+   - `event_name`
+   - `timestamp`  
+3. System automatically:
+   - normalizes data
+   - builds process graph (DFG)
+   - calculates variants
+   - detects bottlenecks  
+4. Explore results in UI
+
+👉 Result: interactive process graph similar to Celonis / Disco
+
+---
+
+## ⚡ Quick start
+
+⚠️ Run backend and UI in **separate terminals**
+
+### Terminal 1 — Backend
 
 ```bash
 cd backend
-python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
-
 uvicorn app.main:app --reload
-backend/
-  app/
-    api/
-    services/
-    engines/
-  data/
-    raw/
-    processed/
-
-ui/
-  streamlit_app.py
-case_id,event_name,timestamp
-1,Start,2026-01-01 10:00:00
-1,Check,2026-01-01 10:05:00
-1,Approve,2026-01-01 10:10:00
-Anton Chernyshov
