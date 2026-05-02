@@ -98,3 +98,65 @@ def calculate_variants(dataset_path: str) -> List[Dict[str, Any]]:
     ]
 
     return variants
+
+
+def calculate_bottlenecks(dataset_path: str) -> Dict[str, List[Dict[str, Any]]]:
+    df = pl.read_parquet(dataset_path).select(["case_id", "event_name", "timestamp"])
+
+    expected = {"case_id", "event_name", "timestamp"}
+    if not expected.issubset(set(df.columns)):
+        raise ValueError("Processed dataset must contain case_id, event_name and timestamp columns")
+
+    df = df.sort(["case_id", "timestamp"])
+
+    # Расчет переходов с длительностью
+    transitions = (
+        df.with_columns([
+            pl.col("event_name").shift(-1).over("case_id").alias("target_event"),
+            pl.col("timestamp").shift(-1).over("case_id").alias("target_timestamp"),
+            pl.col("timestamp").alias("source_timestamp"),
+        ])
+        .filter(pl.col("target_event").is_not_null())
+        .with_columns(
+            (pl.col("target_timestamp") - pl.col("source_timestamp")).dt.total_seconds().alias("duration_seconds")
+        )
+        .with_columns(
+            pl.col("duration_seconds").cast(pl.Float64())
+        )
+        .select([
+            pl.col("event_name").alias("source_event"),
+            pl.col("target_event"),
+            pl.col("duration_seconds"),
+        ])
+    )
+
+    # Агрегирование по переходам
+    edge_groups = (
+        transitions.group_by(["source_event", "target_event"])
+                   .agg([
+                       pl.count().alias("count"),
+                       pl.col("duration_seconds").mean().alias("avg_duration_seconds"),
+                       pl.col("duration_seconds").median().alias("median_duration_seconds"),
+                   ])
+    )
+
+    # Форматирование данных
+    edge_list = [
+        {
+            "source": row["source_event"],
+            "target": row["target_event"],
+            "count": row["count"],
+            "avg_duration_seconds": float(row["avg_duration_seconds"]),
+            "median_duration_seconds": float(row["median_duration_seconds"]),
+        }
+        for row in edge_groups.iter_rows(named=True)
+    ]
+
+    # Сортировка по avg_duration и median_duration
+    top_by_avg = sorted(edge_list, key=lambda x: x["avg_duration_seconds"], reverse=True)
+    top_by_median = sorted(edge_list, key=lambda x: x["median_duration_seconds"], reverse=True)
+
+    return {
+        "top_by_avg_duration": top_by_avg,
+        "top_by_median_duration": top_by_median,
+    }
