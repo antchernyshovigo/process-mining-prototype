@@ -160,3 +160,70 @@ def calculate_bottlenecks(dataset_path: str) -> Dict[str, List[Dict[str, Any]]]:
         "top_by_avg_duration": top_by_avg,
         "top_by_median_duration": top_by_median,
     }
+
+
+def calculate_summary(dataset_path: str) -> Dict[str, Any]:
+    df = pl.read_parquet(dataset_path).select(["case_id", "event_name", "timestamp"])
+
+    expected = {"case_id", "event_name", "timestamp"}
+    if not expected.issubset(set(df.columns)):
+        raise ValueError("Processed dataset must contain case_id, event_name and timestamp columns")
+
+    df = df.sort(["case_id", "timestamp"])
+
+    # Базовые метрики
+    events_count = df.height
+    cases_count = df.select(pl.col("case_id")).unique().height
+    unique_events_count = df.select(pl.col("event_name")).unique().height
+
+    # Уникальные переходы
+    transitions = (
+        df.with_columns(
+            pl.col("event_name").shift(-1).over("case_id").alias("target_event")
+        )
+        .filter(pl.col("target_event").is_not_null())
+        .select(["event_name", "target_event"])
+        .unique()
+    )
+    unique_transitions_count = transitions.height
+
+    # Варианты процесса
+    variants_count = (
+        df.group_by("case_id")
+          .agg(pl.col("event_name").str.join(" -> ").alias("variant"))
+          .select(pl.col("variant"))
+          .unique()
+          .height
+    )
+
+    # Временной диапазон
+    min_timestamp = df.select(pl.col("timestamp").min()).item()
+    max_timestamp = df.select(pl.col("timestamp").max()).item()
+
+    # Длительность случаев
+    case_durations = (
+        df.group_by("case_id")
+          .agg([
+              pl.col("timestamp").min().alias("start_time"),
+              pl.col("timestamp").max().alias("end_time"),
+          ])
+          .with_columns(
+              (pl.col("end_time") - pl.col("start_time")).dt.total_seconds().cast(pl.Float64()).alias("duration_seconds")
+          )
+          .select(pl.col("duration_seconds"))
+    )
+
+    avg_case_duration_seconds = float(case_durations.select(pl.col("duration_seconds").mean()).item())
+    median_case_duration_seconds = float(case_durations.select(pl.col("duration_seconds").median()).item())
+
+    return {
+        "events_count": events_count,
+        "cases_count": cases_count,
+        "unique_events_count": unique_events_count,
+        "unique_transitions_count": unique_transitions_count,
+        "variants_count": variants_count,
+        "min_timestamp": str(min_timestamp),
+        "max_timestamp": str(max_timestamp),
+        "avg_case_duration_seconds": round(avg_case_duration_seconds, 2),
+        "median_case_duration_seconds": round(median_case_duration_seconds, 2),
+    }

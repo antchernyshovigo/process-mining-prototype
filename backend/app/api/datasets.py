@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 
 from app.services.dataset_service import process_and_save_dataset
-from app.services.dfg_service import get_dfg_graph, get_variants, get_bottlenecks
+from app.services.dfg_service import get_dfg_graph, get_variants, get_bottlenecks, get_summary
 
 router = APIRouter()
 
@@ -54,6 +54,21 @@ async def get_dataset_variants(dataset_id: str):
 async def get_dataset_bottlenecks(dataset_id: str):
     try:
         return get_bottlenecks(dataset_id)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        import traceback
+
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{dataset_id}/summary")
+async def get_dataset_summary(dataset_id: str):
+    try:
+        return get_summary(dataset_id)
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except ValueError as e:
