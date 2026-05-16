@@ -10,10 +10,17 @@ async def upload_dataset(
     file: UploadFile = File(...),
     case_id_column: str = Form(...),
     event_name_column: str = Form(...),
-    timestamp_column: str = Form(...)
+    timestamp_column: str = Form(...),
+    delimiter: str | None = Form(None)
 ):
     try:
-        result = await process_and_save_dataset(file, case_id_column, event_name_column, timestamp_column)
+        result = await process_and_save_dataset(
+            file,
+            case_id_column,
+            event_name_column,
+            timestamp_column,
+            delimiter,
+        )
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
