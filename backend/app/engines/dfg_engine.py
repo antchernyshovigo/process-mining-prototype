@@ -12,16 +12,43 @@ def calculate_dfg(dataset_path: str) -> Dict[str, List[Dict[str, Any]]]:
     df = df.sort(["case_id", "timestamp"])
 
     case_count = df.select(pl.col("case_id")).unique().height
+    start_groups = (
+        df.group_by("case_id")
+          .agg(pl.col("event_name").first().alias("event_name"))
+          .group_by("event_name")
+          .agg(pl.count().alias("count"))
+          .sort("event_name")
+    )
+    end_groups = (
+        df.group_by("case_id")
+          .agg(pl.col("event_name").last().alias("event_name"))
+          .group_by("event_name")
+          .agg(pl.count().alias("count"))
+          .sort("event_name")
+    )
+
     node_counts = (
         df.group_by("event_name")
           .agg(pl.count().alias("count"))
           .sort("event_name")
     )
 
-    nodes = [
+    nodes = [{
+        "id": "__PROCESS_START__",
+        "label": "PROCESS START",
+        "count": case_count,
+        "type": "start",
+    }]
+    nodes.extend([
         {"id": row["event_name"], "count": row["count"]}
         for row in node_counts.iter_rows(named=True)
-    ]
+    ])
+    nodes.append({
+        "id": "__PROCESS_END__",
+        "label": "PROCESS END",
+        "count": case_count,
+        "type": "end",
+    })
 
     transitions = (
         df.with_columns([
@@ -56,6 +83,16 @@ def calculate_dfg(dataset_path: str) -> Dict[str, List[Dict[str, Any]]]:
 
     edges = [
         {
+            "source": "__PROCESS_START__",
+            "target": row["event_name"],
+            "count": row["count"],
+            "avg_duration_seconds": 0.0,
+            "median_duration_seconds": 0.0,
+        }
+        for row in start_groups.iter_rows(named=True)
+    ]
+    edges.extend([
+        {
             "source": row["source_event"],
             "target": row["target_event"],
             "count": row["count"],
@@ -63,7 +100,17 @@ def calculate_dfg(dataset_path: str) -> Dict[str, List[Dict[str, Any]]]:
             "median_duration_seconds": float(row["median_duration_seconds"]),
         }
         for row in edge_groups.iter_rows(named=True)
-    ]
+    ])
+    edges.extend([
+        {
+            "source": row["event_name"],
+            "target": "__PROCESS_END__",
+            "count": row["count"],
+            "avg_duration_seconds": 0.0,
+            "median_duration_seconds": 0.0,
+        }
+        for row in end_groups.iter_rows(named=True)
+    ])
 
     return {"nodes": nodes, "edges": edges}
 
