@@ -1,6 +1,7 @@
 import json
 import math
 import time
+import html
 import streamlit as st
 import streamlit.components.v1 as components
 import requests
@@ -95,6 +96,12 @@ def truncate_text(text, max_len=60):
     return value[: max_len - 1].rstrip() + "…"
 
 
+def escape_html(value):
+    if value is None:
+        return "—"
+    return html.escape(str(value), quote=True)
+
+
 def safe_divide(numerator, denominator):
     numerator = safe_float(numerator)
     denominator = safe_float(denominator)
@@ -107,8 +114,8 @@ def render_kpi_cards(cards, columns):
     cards_html = "".join(
         f"""
         <div class="process-kpi-card">
-            <div class="process-kpi-label">{label}</div>
-            <div class="process-kpi-value">{value}</div>
+            <div class="process-kpi-label">{escape_html(label)}</div>
+            <div class="process-kpi-value">{escape_html(value)}</div>
         </div>
         """
         for label, value in cards
@@ -139,7 +146,11 @@ def clean_graph_identifier(value):
 
 
 def get_node_id(node):
-    return clean_graph_identifier(node.get("id"))
+    for key in ("id", "event_name", "label"):
+        node_id = clean_graph_identifier(node.get(key))
+        if node_id:
+            return node_id
+    return None
 
 
 def get_node_display_name(node, node_id):
@@ -1081,7 +1092,7 @@ elif page == "Summary":
                 else:
                     observations.append("Process variants are relatively concentrated.")
 
-                observation_items = "".join(f"<li>{item}</li>" for item in observations[:4])
+                observation_items = "".join(f"<li>{escape_html(item)}</li>" for item in observations[:4])
                 st.markdown(
                     f"""
                     <div class="process-summary-panel">
@@ -1104,7 +1115,7 @@ elif page == "Summary":
                     with st.container(border=True):
                         st.markdown('<div class="process-chart-title">Process variability</div>', unsafe_allow_html=True)
                         st.markdown(
-                            f'<div class="process-muted-text">{variability_message}</div>',
+                            f'<div class="process-muted-text">{escape_html(variability_message)}</div>',
                             unsafe_allow_html=True,
                         )
 
@@ -1119,8 +1130,8 @@ elif page == "Summary":
                         period_html = "".join(
                             f"""
                             <div class="process-kpi-card">
-                                <div class="process-kpi-label">{label}</div>
-                                <div class="process-kpi-value" style="font-size: 16px;">{value}</div>
+                                <div class="process-kpi-label">{escape_html(label)}</div>
+                                <div class="process-kpi-value" style="font-size: 16px;">{escape_html(value)}</div>
                             </div>
                             """
                             for label, value in period_cards

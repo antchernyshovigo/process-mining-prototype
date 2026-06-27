@@ -9,6 +9,7 @@ A lightweight process mining prototype for uploading event logs, normalizing the
 - Normalize data into standard columns: `case_id`, `event_name`, `timestamp`.
 - Build a directly-follows graph (DFG).
 - View process variants and bottleneck transitions.
+- Explore overview charts and advanced analytics for variants, transitions, and activities.
 - Use regular upload for small files and chunked upload for large CSV files.
 
 ## Project Structure
@@ -90,6 +91,7 @@ data/sample/event_log.csv
 5. Confirm delimiter and column mapping.
 6. Explore:
    - Summary
+   - Advanced Analytics
    - Graph
    - Variants
    - Bottlenecks
