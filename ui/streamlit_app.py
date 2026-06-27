@@ -86,6 +86,15 @@ def format_timestamp(value):
     return timestamp.strftime("%Y-%m-%d %H:%M")
 
 
+def truncate_text(text, max_len=60):
+    if text is None:
+        return "—"
+    value = str(text).strip()
+    if len(value) <= max_len:
+        return value
+    return value[: max_len - 1].rstrip() + "…"
+
+
 def safe_divide(numerator, denominator):
     numerator = safe_float(numerator)
     denominator = safe_float(denominator)
@@ -130,11 +139,11 @@ def clean_graph_identifier(value):
 
 
 def get_node_id(node):
-    for key in ("id", "event_name", "label"):
-        node_id = clean_graph_identifier(node.get(key))
-        if node_id:
-            return node_id
-    return None
+    return clean_graph_identifier(node.get("id"))
+
+
+def get_node_display_name(node, node_id):
+    return clean_graph_identifier(node.get("label")) or node_id
 
 
 def normalize_graph_data(nodes, edges):
@@ -153,7 +162,7 @@ def normalize_graph_data(nodes, edges):
             normalized_node["label"] = "PROCESS END"
             normalized_node["type"] = "end"
         else:
-            normalized_node.pop("label", None)
+            normalized_node["label"] = get_node_display_name(node, node_id)
         normalized_nodes.append(normalized_node)
         seen_node_ids.add(node_id)
 
@@ -292,10 +301,8 @@ def render_graph(nodes, edges, mode="process_map", show_edge_labels=True, show_n
     for node in nodes:
         node_id = str(node["id"])
         count = node_count_by_id.get(node_id, 0)
-        event_name = str(node.get("label", node["id"]))
-        label = event_name
-        if show_node_counts:
-            label = f"{event_name}\ncount: {count}"
+        event_name = get_node_display_name(node, node_id)
+        label = f"{event_name}\ncount: {count}" if show_node_counts else event_name
         tooltip = f"{event_name}<br>Count: {count}"
         node_options = {"level": levels.get(node_id, 1)} if is_process_map else {}
         if node_id == PROCESS_START_ID:
@@ -458,7 +465,7 @@ def render_graph(nodes, edges, mode="process_map", show_edge_labels=True, show_n
     return html
 page = st.sidebar.radio(
     "Navigation",
-    ["Upload", "Summary", "Graph", "Variants", "Bottlenecks"],
+    ["Upload", "Summary", "Advanced Analytics", "Graph", "Variants", "Bottlenecks"],
     index=0,
 )
 
@@ -724,67 +731,103 @@ if page == "Upload":
         st.info("Select a CSV or Excel file to begin.")
 
 elif page == "Summary":
-    st.header("Process Overview")
+    st.markdown(
+        """
+        <div class="process-overview-header">
+            <div class="process-overview-title">Process Overview</div>
+            <div class="process-overview-subtitle">
+                High-level process health, variability and performance.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     st.markdown(
         """
         <style>
+            .process-overview-header {
+                margin: 0 0 10px 0;
+            }
+            .process-overview-title {
+                color: #111827;
+                font-size: 24px;
+                font-weight: 800;
+                line-height: 1.15;
+                margin-bottom: 3px;
+            }
             .process-overview-subtitle {
                 color: #6b7280;
-                font-size: 15px;
-                margin: -4px 0 18px 0;
+                font-size: 13px;
+                line-height: 1.35;
             }
             .process-kpi-grid {
                 display: grid;
-                gap: 14px;
-                margin: 12px 0 18px 0;
+                gap: 10px;
+                margin: 8px 0 10px 0;
             }
             .process-kpi-card {
                 background: #ffffff;
                 border: 1px solid #e5e7eb;
-                border-radius: 12px;
+                border-radius: 10px;
                 box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-                min-height: 96px;
-                padding: 18px;
+                min-height: 72px;
+                padding: 12px 14px;
             }
             .process-kpi-label {
                 color: #6b7280;
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: 650;
                 letter-spacing: 0;
                 line-height: 1.25;
-                margin-bottom: 10px;
+                margin-bottom: 7px;
             }
             .process-kpi-value {
                 color: #111827;
-                font-size: 28px;
+                font-size: 23px;
                 font-weight: 800;
                 line-height: 1.1;
                 overflow-wrap: anywhere;
+            }
+            .process-chart-panel {
+                background: #ffffff;
+                border: 1px solid #e5e7eb;
+                border-radius: 12px;
+                padding: 14px;
+                margin-top: 10px;
+            }
+            .process-chart-title {
+                color: #111827;
+                font-size: 15px;
+                font-weight: 750;
+                margin-bottom: 8px;
+            }
+            .process-muted-text {
+                color: #6b7280;
+                font-size: 13px;
+                line-height: 1.4;
+                margin: 4px 0 10px 0;
             }
             .process-summary-panel {
                 background: #ffffff;
                 border: 1px solid #e5e7eb;
                 border-radius: 12px;
-                margin-top: 12px;
-                padding: 18px;
+                margin: 10px 0 12px 0;
+                padding: 13px 15px;
             }
             .process-summary-panel-title {
                 color: #111827;
-                font-size: 16px;
+                font-size: 15px;
                 font-weight: 750;
-                margin-bottom: 10px;
+                margin-bottom: 6px;
             }
             .process-summary-list {
                 color: #374151;
-                font-size: 15px;
-                line-height: 1.55;
+                font-size: 13px;
+                line-height: 1.45;
                 margin: 0;
-                padding-left: 20px;
+                padding-left: 18px;
             }
         </style>
-        <p class="process-overview-subtitle">
-            High-level view of the uploaded event log and process behavior.
-        </p>
         """,
         unsafe_allow_html=True,
     )
@@ -824,73 +867,461 @@ elif page == "Summary":
                 )
                 render_kpi_cards(
                     [
-                        ("Avg case duration", format_duration(avg_duration)),
-                        ("Median case duration", format_duration(median_duration)),
-                        ("Events per case", format_number(events_per_case)),
-                        ("Variants per 100 cases", format_number(variants_per_100_cases)),
+                        ("Avg duration", format_duration(avg_duration)),
+                        ("Median duration", format_duration(median_duration)),
+                        ("Events / case", format_number(events_per_case)),
+                        ("Variants / 100 cases", format_number(variants_per_100_cases)),
                     ],
                     columns=4,
                 )
 
-                st.subheader("Process variability")
-                if variants_per_case is None:
-                    st.info("Not enough data to assess process variability.")
-                elif variants_per_case > 0.3:
-                    st.warning("High variability: many unique variants compared to total cases.")
-                else:
-                    st.success("Process variants are relatively concentrated.")
-
                 start_time = pd.to_datetime(min_timestamp, errors="coerce")
                 end_time = pd.to_datetime(max_timestamp, errors="coerce")
                 covered_period = "—"
+                period_seconds = None
                 if not pd.isna(start_time) and not pd.isna(end_time):
-                    covered_seconds = (end_time - start_time).total_seconds()
-                    if covered_seconds >= 0:
-                        covered_period = format_duration(covered_seconds)
+                    period_seconds = (end_time - start_time).total_seconds()
+                    if period_seconds >= 0:
+                        covered_period = format_duration(period_seconds)
 
-                st.subheader("Time period")
-                render_kpi_cards(
-                    [
-                        ("Start", format_timestamp(min_timestamp)),
-                        ("End", format_timestamp(max_timestamp)),
-                        ("Covered period", covered_period),
-                    ],
-                    columns=3,
+                if period_seconds is None or period_seconds < 7 * 86400:
+                    auto_time_scale = "hour"
+                elif period_seconds < 90 * 86400:
+                    auto_time_scale = "day"
+                else:
+                    auto_time_scale = "week"
+
+                time_scale_choice = st.selectbox(
+                    "Time scale",
+                    ["Auto", "Hour", "Day", "Week", "Month"],
+                    index=0,
+                    help="Auto uses hour for short logs, day for medium logs, and week for long logs.",
+                )
+                resolved_time_scale = auto_time_scale if time_scale_choice == "Auto" else time_scale_choice.lower()
+                st.caption(
+                    f"Time period: {format_timestamp(min_timestamp)} → {format_timestamp(max_timestamp)} "
+                    f"({covered_period}). Scale: {resolved_time_scale.title()}."
                 )
 
-                interpretations = []
+                variants_data = []
+                graph_data = {"nodes": [], "edges": []}
+
+                variants_response = requests.get(f"{API_BASE_URL}/datasets/{dataset_id}/variants")
+                if variants_response.status_code == 200:
+                    variants_data = variants_response.json()
+
+                graph_response = requests.get(f"{API_BASE_URL}/datasets/{dataset_id}/graph")
+                if graph_response.status_code == 200:
+                    graph_data = graph_response.json()
+
+                variants_df = pd.DataFrame(variants_data)
+                graph_nodes, _ = normalize_graph_data(graph_data.get("nodes", []), graph_data.get("edges", []))
+                activities_df = pd.DataFrame(graph_nodes)
+                time_series = summary.get("time_series", {})
+                selected_time_series = time_series.get(resolved_time_scale, {})
+                cases_time_df = pd.DataFrame(selected_time_series.get("cases_over_time", []))
+                events_time_df = pd.DataFrame(selected_time_series.get("events_over_time", []))
+
+                if not cases_time_df.empty and "bucket" in cases_time_df.columns:
+                    cases_time_df["bucket"] = pd.to_datetime(cases_time_df["bucket"], errors="coerce")
+                    if "started_cases_count" not in cases_time_df.columns:
+                        cases_time_df["started_cases_count"] = 0
+                    cases_time_df["started_cases_count"] = pd.to_numeric(
+                        cases_time_df["started_cases_count"],
+                        errors="coerce",
+                    ).fillna(0)
+                    cases_time_df = cases_time_df.dropna(subset=["bucket"]).sort_values("bucket")
+
+                if not events_time_df.empty and "bucket" in events_time_df.columns:
+                    events_time_df["bucket"] = pd.to_datetime(events_time_df["bucket"], errors="coerce")
+                    if "events_count" not in events_time_df.columns:
+                        events_time_df["events_count"] = 0
+                    events_time_df["events_count"] = pd.to_numeric(
+                        events_time_df["events_count"],
+                        errors="coerce",
+                    ).fillna(0)
+                    events_time_df = events_time_df.dropna(subset=["bucket"]).sort_values("bucket")
+
+                top_variant_share = None
+                if not variants_df.empty and "cases_count" in variants_df.columns:
+                    variants_df["cases_count"] = pd.to_numeric(variants_df["cases_count"], errors="coerce").fillna(0)
+                    variants_df = variants_df.sort_values("cases_count", ascending=False)
+                    top_variant_cases = safe_float(variants_df.iloc[0].get("cases_count"))
+                    top_variant_share = safe_float(variants_df.iloc[0].get("share_percent"))
+                    if top_variant_share is None:
+                        top_variant_share = safe_divide(top_variant_cases, cases_count)
+                        if top_variant_share is not None:
+                            top_variant_share *= 100
+
+                trend_message = "Not enough time-series data to assess volume dynamics."
+                if not cases_time_df.empty and len(cases_time_df) >= 2:
+                    case_counts = cases_time_df["started_cases_count"].tolist()
+                    first_count = case_counts[0]
+                    last_count = case_counts[-1]
+                    change = last_count - first_count
+                    stability_threshold = max(1, first_count * 0.1)
+                    if abs(change) <= stability_threshold:
+                        trend_message = "Started case volume is broadly stable over the selected period."
+                    elif change > 0:
+                        trend_message = "Started case volume is growing over the selected period."
+                    else:
+                        trend_message = "Started case volume is decreasing over the selected period."
+
+                chart_left, chart_right = st.columns(2)
+                with chart_left:
+                    with st.container(border=True):
+                        st.markdown('<div class="process-chart-title">Cases Over Time</div>', unsafe_allow_html=True)
+                        if cases_time_df.empty:
+                            st.info("No case start timeline available.")
+                        else:
+                            st.line_chart(
+                                cases_time_df,
+                                x="bucket",
+                                y="started_cases_count",
+                                height=260,
+                                x_label="Time",
+                                y_label="Started cases",
+                            )
+
+                with chart_right:
+                    with st.container(border=True):
+                        st.markdown('<div class="process-chart-title">Events Over Time</div>', unsafe_allow_html=True)
+                        if events_time_df.empty:
+                            st.info("No event timeline available.")
+                        else:
+                            st.line_chart(
+                                events_time_df,
+                                x="bucket",
+                                y="events_count",
+                                height=260,
+                                x_label="Time",
+                                y_label="Events",
+                            )
+
+                simple_left, simple_right = st.columns(2)
+                with simple_left:
+                    with st.container(border=True):
+                        st.markdown('<div class="process-chart-title">Top Variant Coverage</div>', unsafe_allow_html=True)
+                        if top_variant_share is None:
+                            st.info("No variants data available.")
+                        else:
+                            progress_value = min(1.0, max(0.0, top_variant_share / 100))
+                            st.progress(progress_value)
+                            st.caption(f"Top variant covers {format_number(top_variant_share)}% of cases")
+
+                        st.markdown('<div class="process-chart-title">Duration comparison</div>', unsafe_allow_html=True)
+                        duration_col1, duration_col2 = st.columns(2)
+                        duration_col1.metric("Average", format_duration(avg_duration))
+                        duration_col2.metric("Median", format_duration(median_duration))
+
+                with simple_right:
+                    with st.container(border=True):
+                        st.markdown('<div class="process-chart-title">Most frequent activities</div>', unsafe_allow_html=True)
+                        if activities_df.empty or "id" not in activities_df.columns:
+                            st.info("No graph activity data available.")
+                        else:
+                            summary_activities_df = activities_df[
+                                ~activities_df["id"].isin({PROCESS_START_ID, PROCESS_END_ID})
+                            ].copy()
+                            if summary_activities_df.empty:
+                                st.info("No regular activities available.")
+                            else:
+                                if "count" not in summary_activities_df.columns:
+                                    summary_activities_df["count"] = 0
+                                summary_activities_df["count"] = pd.to_numeric(
+                                    summary_activities_df["count"],
+                                    errors="coerce",
+                                ).fillna(0)
+                                summary_activities_df = summary_activities_df.sort_values(
+                                    "count",
+                                    ascending=False,
+                                ).head(5)
+                                summary_activities_df["activity"] = summary_activities_df["id"].apply(
+                                    lambda value: truncate_text(value, 36)
+                                )
+                                st.bar_chart(
+                                    summary_activities_df,
+                                    x="count",
+                                    y="activity",
+                                    horizontal=True,
+                                    height=260,
+                                    x_label="Events",
+                                    y_label="Activity",
+                                )
+
+                observations = []
+                observations.append(trend_message)
                 if events_per_case is not None:
-                    interpretations.append(f"Average case contains {format_number(events_per_case)} events.")
-                if variants_count is not None and cases_count is not None:
-                    interpretations.append(
-                        f"There are {format_number(variants_count)} variants across {format_number(cases_count)} cases."
-                    )
+                    observations.append(f"Average case contains {format_number(events_per_case)} events.")
+                else:
+                    observations.append("Average case length is not available yet.")
+
+                if top_variant_share is not None:
+                    observations.append(f"Top variant covers {format_number(top_variant_share)}% of cases.")
+                else:
+                    observations.append("Top variant coverage is not available yet.")
+
                 avg_duration_number = safe_float(avg_duration)
                 median_duration_number = safe_float(median_duration)
-                if (
+                has_duration_skew = (
                     avg_duration_number is not None
                     and median_duration_number is not None
                     and median_duration_number > 0
                     and avg_duration_number > median_duration_number * 3
-                ):
-                    interpretations.append("Median duration is much lower than average.")
-                if not interpretations:
-                    interpretations.append("Upload contains limited summary data, so interpretation is not available yet.")
+                )
+                has_high_variability = variants_per_case is not None and variants_per_case > 0.3
+                if has_high_variability and has_duration_skew:
+                    observations.append(
+                        "High variability, and median duration is much lower than average."
+                    )
+                elif has_high_variability:
+                    observations.append("High variability: many unique variants compared to total cases.")
+                elif has_duration_skew:
+                    observations.append("Median duration is much lower than average.")
+                else:
+                    observations.append("Process variants are relatively concentrated.")
 
-                interpretation_items = "".join(f"<li>{item}</li>" for item in interpretations)
+                observation_items = "".join(f"<li>{item}</li>" for item in observations[:4])
                 st.markdown(
                     f"""
                     <div class="process-summary-panel">
                         <div class="process-summary-panel-title">Quick interpretation</div>
-                        <ul class="process-summary-list">{interpretation_items}</ul>
+                        <ul class="process-summary-list">{observation_items}</ul>
                     </div>
                     """,
                     unsafe_allow_html=True,
                 )
+
+                variability_message = "Not enough data to assess process variability."
+                if variants_per_case is not None:
+                    if variants_per_case > 0.3:
+                        variability_message = "High variability: many unique variants compared to total cases."
+                    else:
+                        variability_message = "Process variants are relatively concentrated."
+
+                insight_col, period_col = st.columns(2)
+                with insight_col:
+                    with st.container(border=True):
+                        st.markdown('<div class="process-chart-title">Process variability</div>', unsafe_allow_html=True)
+                        st.markdown(
+                            f'<div class="process-muted-text">{variability_message}</div>',
+                            unsafe_allow_html=True,
+                        )
+
+                with period_col:
+                    with st.container(border=True):
+                        st.markdown('<div class="process-chart-title">Time period</div>', unsafe_allow_html=True)
+                        period_cards = [
+                            ("Start", format_timestamp(min_timestamp)),
+                            ("End", format_timestamp(max_timestamp)),
+                            ("Covered", covered_period),
+                        ]
+                        period_html = "".join(
+                            f"""
+                            <div class="process-kpi-card">
+                                <div class="process-kpi-label">{label}</div>
+                                <div class="process-kpi-value" style="font-size: 16px;">{value}</div>
+                            </div>
+                            """
+                            for label, value in period_cards
+                        )
+                        st.markdown(
+                            f"""
+                            <div class="process-kpi-grid" style="grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 0;">
+                                {period_html}
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
             else:
                 st.error(f"Error: {response.json().get('detail', response.text)}")
         except Exception as e:
             st.error(f"Error fetching summary: {str(e)}")
+
+elif page == "Advanced Analytics":
+    st.markdown(
+        """
+        <style>
+            .process-overview-header {
+                margin: 0 0 12px 0;
+            }
+            .process-overview-title {
+                color: #111827;
+                font-size: 24px;
+                font-weight: 800;
+                line-height: 1.15;
+                margin-bottom: 3px;
+            }
+            .process-overview-subtitle {
+                color: #6b7280;
+                font-size: 13px;
+                line-height: 1.35;
+            }
+            .process-chart-title {
+                color: #111827;
+                font-size: 15px;
+                font-weight: 750;
+                margin-bottom: 8px;
+            }
+        </style>
+        <div class="process-overview-header">
+            <div class="process-overview-title">Advanced Analytics</div>
+            <div class="process-overview-subtitle">
+                Detailed process distribution, performance and activity frequency.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if not st.session_state.dataset_id:
+        st.info("Upload a dataset first to see advanced analytics.")
+    else:
+        dataset_id = st.session_state.dataset_id
+        try:
+            variants_data = []
+            bottlenecks_data = {}
+            graph_data = {"nodes": [], "edges": []}
+
+            variants_response = requests.get(f"{API_BASE_URL}/datasets/{dataset_id}/variants")
+            if variants_response.status_code == 200:
+                variants_data = variants_response.json()
+
+            bottlenecks_response = requests.get(f"{API_BASE_URL}/datasets/{dataset_id}/bottlenecks")
+            if bottlenecks_response.status_code == 200:
+                bottlenecks_data = bottlenecks_response.json()
+
+            graph_response = requests.get(f"{API_BASE_URL}/datasets/{dataset_id}/graph")
+            if graph_response.status_code == 200:
+                graph_data = graph_response.json()
+
+            left_col, right_col = st.columns(2)
+
+            with left_col:
+                with st.container(border=True):
+                    st.markdown('<div class="process-chart-title">Top Process Variants</div>', unsafe_allow_html=True)
+                    variants_df = pd.DataFrame(variants_data)
+                    if variants_df.empty or "variant" not in variants_df.columns or "cases_count" not in variants_df.columns:
+                        st.info("No variants data available.")
+                    else:
+                        variants_df["cases_count"] = pd.to_numeric(
+                            variants_df["cases_count"],
+                            errors="coerce",
+                        ).fillna(0)
+                        variants_df = variants_df.sort_values("cases_count", ascending=False)
+                        variants_chart_df = variants_df.head(10).copy().reset_index(drop=True)
+                        variants_chart_df["variant_short"] = [
+                            f"Variant {index + 1}" for index in range(len(variants_chart_df))
+                        ]
+                        st.bar_chart(
+                            variants_chart_df,
+                            x="cases_count",
+                            y="variant_short",
+                            horizontal=True,
+                            height=320,
+                            x_label="Cases",
+                            y_label="Variant",
+                        )
+                        variants_table_df = variants_chart_df[["variant", "cases_count"]].copy()
+                        if "share_percent" in variants_chart_df.columns:
+                            variants_table_df["share_percent"] = variants_chart_df["share_percent"]
+                        else:
+                            variants_table_df["share_percent"] = "—"
+                        st.dataframe(variants_table_df, use_container_width=True, hide_index=True)
+
+            with right_col:
+                with st.container(border=True):
+                    st.markdown('<div class="process-chart-title">Slowest Transitions</div>', unsafe_allow_html=True)
+                    bottlenecks_df = pd.DataFrame(bottlenecks_data.get("top_by_avg_duration", []))
+                    if (
+                        bottlenecks_df.empty
+                        or "avg_duration_seconds" not in bottlenecks_df.columns
+                        or "source" not in bottlenecks_df.columns
+                        or "target" not in bottlenecks_df.columns
+                    ):
+                        st.info("No bottleneck data available.")
+                    else:
+                        bottlenecks_df["avg_duration_seconds"] = pd.to_numeric(
+                            bottlenecks_df["avg_duration_seconds"],
+                            errors="coerce",
+                        ).fillna(0)
+                        bottlenecks_df = bottlenecks_df.sort_values(
+                            "avg_duration_seconds",
+                            ascending=False,
+                        )
+                        bottlenecks_chart_df = bottlenecks_df.head(10).copy()
+                        bottlenecks_chart_df["transition"] = bottlenecks_chart_df.apply(
+                            lambda row: f"{row['source']} → {row['target']}",
+                            axis=1,
+                        )
+                        bottlenecks_chart_df["transition_short"] = bottlenecks_chart_df["transition"].apply(
+                            lambda value: truncate_text(value, 60)
+                        )
+                        bottlenecks_chart_df["avg_duration"] = bottlenecks_chart_df[
+                            "avg_duration_seconds"
+                        ].apply(format_duration)
+                        st.bar_chart(
+                            bottlenecks_chart_df,
+                            x="avg_duration_seconds",
+                            y="transition_short",
+                            horizontal=True,
+                            height=320,
+                            x_label="Avg duration, seconds",
+                            y_label="Transition",
+                        )
+                        transition_table_columns = ["transition", "count", "avg_duration"]
+                        if "median_duration_seconds" in bottlenecks_chart_df.columns:
+                            bottlenecks_chart_df["median_duration"] = bottlenecks_chart_df[
+                                "median_duration_seconds"
+                            ].apply(format_duration)
+                            transition_table_columns.append("median_duration")
+                        st.dataframe(
+                            bottlenecks_chart_df[transition_table_columns],
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+
+            with st.container(border=True):
+                st.markdown('<div class="process-chart-title">Top Activities</div>', unsafe_allow_html=True)
+                graph_nodes, _ = normalize_graph_data(graph_data.get("nodes", []), graph_data.get("edges", []))
+                activities_df = pd.DataFrame(graph_nodes)
+                if activities_df.empty or "id" not in activities_df.columns:
+                    st.info("No graph activity data available.")
+                else:
+                    activities_df = activities_df[
+                        ~activities_df["id"].isin({PROCESS_START_ID, PROCESS_END_ID})
+                    ].copy()
+                    if activities_df.empty:
+                        st.info("No regular activities available.")
+                    else:
+                        if "count" not in activities_df.columns:
+                            activities_df["count"] = 0
+                        activities_df["count"] = pd.to_numeric(
+                            activities_df["count"],
+                            errors="coerce",
+                        ).fillna(0)
+                        activities_df = activities_df.sort_values("count", ascending=False)
+                        activities_chart_df = activities_df.head(10).copy()
+                        activities_chart_df["activity"] = activities_chart_df["id"].astype(str)
+                        activities_chart_df["activity_short"] = activities_chart_df["activity"].apply(
+                            lambda value: truncate_text(value, 60)
+                        )
+                        st.bar_chart(
+                            activities_chart_df,
+                            x="count",
+                            y="activity_short",
+                            horizontal=True,
+                            height=360,
+                            x_label="Events",
+                            y_label="Activity",
+                        )
+                        st.dataframe(
+                            activities_chart_df[["activity", "count"]],
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+        except Exception as e:
+            st.error(f"Error fetching advanced analytics: {str(e)}")
 
 elif page == "Graph":
     st.header("Process Graph")
@@ -906,7 +1337,6 @@ elif page == "Graph":
                 nodes_df = pd.DataFrame(graph_nodes)
                 edges_df = pd.DataFrame(graph_edges)
                 total_edges = len(edges_df)
-                large_graph = total_edges > 100
 
                 st.subheader("Graph Controls")
                 col1, col2, col3 = st.columns(3)
@@ -918,16 +1348,12 @@ elif page == "Graph":
                     value=1,
                     step=1,
                 )
-                top_n_transitions = col2.slider("Top N Transitions", 5, 200, 30)
-                top_n_activities = col3.slider("Top N Activities", 5, 200, 30)
-                show_edge_labels = col4.checkbox("Show edge labels", value=True)
-                show_node_counts = col5.checkbox("Show node counts", value=True)
+                top_n_activities = col2.slider("Top N Activities", 5, 200, 30)
+                top_n_transitions = col3.slider("Top N Transitions", 5, 200, 30)
+                show_edge_labels = col4.checkbox("Show Edge Labels", value=True)
+                show_node_counts = col5.checkbox("Show Node Counts", value=True)
                 graph_mode = col6.selectbox("Layout Mode", ["Process Map", "Free Layout"])
-                fullscreen_graph = col7.checkbox("Fullscreen graph", value=False)
-
-                if large_graph:
-                    st.info("Large graph detected — low-frequency transitions are hidden by default.")
-                    min_transition_count = max(min_transition_count, 2)
+                fullscreen_graph = col7.checkbox("Fullscreen Graph", value=False)
 
                 synthetic_node_ids = {PROCESS_START_ID, PROCESS_END_ID}
                 raw_edges_count = len(edges_df)
@@ -935,8 +1361,11 @@ elif page == "Graph":
 
                 if not nodes_df.empty:
                     nodes_df["id"] = nodes_df["id"].astype(str)
+                    if "count" not in nodes_df.columns:
+                        nodes_df["count"] = 0
+                    nodes_df["count"] = pd.to_numeric(nodes_df["count"], errors="coerce").fillna(0)
                     synthetic_nodes_df = nodes_df[nodes_df["id"].isin(synthetic_node_ids)]
-                    regular_nodes_df = nodes_df[~nodes_df["id"].isin(synthetic_node_ids)]
+                    regular_nodes_df = nodes_df[~nodes_df["id"].isin(synthetic_node_ids)].copy()
                     raw_regular_nodes_count = len(regular_nodes_df)
                     regular_nodes_df = regular_nodes_df.sort_values("count", ascending=False).head(top_n_activities)
                     nodes_df = pd.concat([synthetic_nodes_df, regular_nodes_df], ignore_index=True)
@@ -946,20 +1375,32 @@ elif page == "Graph":
                 if not edges_df.empty:
                     edges_df["source"] = edges_df["source"].astype(str)
                     edges_df["target"] = edges_df["target"].astype(str)
-                    edges_df = edges_df[edges_df["count"] >= min_transition_count]
-                    edges_df = edges_df.nlargest(top_n_transitions, "count")
-                    edges_df = edges_df[
-                        edges_df["source"].isin(visible_node_ids) &
-                        edges_df["target"].isin(visible_node_ids)
+                    if "count" not in edges_df.columns:
+                        edges_df["count"] = 0
+                    edges_df["count"] = pd.to_numeric(edges_df["count"], errors="coerce").fillna(0)
+                    start_end_edges_df = edges_df[
+                        (edges_df["source"].isin(synthetic_node_ids) & edges_df["target"].isin(visible_node_ids))
+                        | (edges_df["target"].isin(synthetic_node_ids) & edges_df["source"].isin(visible_node_ids))
                     ]
+                    regular_edges_df = edges_df[
+                        ~edges_df["source"].isin(synthetic_node_ids)
+                        & ~edges_df["target"].isin(synthetic_node_ids)
+                    ]
+                    regular_edges_df = regular_edges_df[
+                        regular_edges_df["source"].isin(visible_node_ids)
+                        & regular_edges_df["target"].isin(visible_node_ids)
+                    ]
+                    regular_edges_df = regular_edges_df[regular_edges_df["count"] >= min_transition_count]
+                    regular_edges_df = regular_edges_df.sort_values("count", ascending=False).head(top_n_transitions)
+                    edges_df = pd.concat([start_end_edges_df, regular_edges_df], ignore_index=True)
 
-                hidden_edges_count = raw_edges_count - len(edges_df)
+                hidden_edges_count = max(0, raw_edges_count - len(edges_df))
                 visible_activities_count = len(nodes_df[~nodes_df["id"].isin(synthetic_node_ids)]) if not nodes_df.empty else 0
                 hidden_nodes_count = max(0, raw_regular_nodes_count - visible_activities_count)
                 graph_message = f"Showing {visible_activities_count} activities and {len(edges_df)} transitions"
-                if hidden_edges_count > 0 or hidden_nodes_count > 0:
-                    graph_message += ". Some low-frequency elements are hidden."
                 st.caption(graph_message)
+                if hidden_edges_count > 0 or hidden_nodes_count > 0:
+                    st.info("Some low-frequency activities or transitions are hidden by filters.")
 
                 if edges_df.empty:
                     st.warning("No edges remain after filtering. Relax filters to view the graph.")

@@ -209,6 +209,57 @@ def calculate_bottlenecks(dataset_path: str) -> Dict[str, List[Dict[str, Any]]]:
     }
 
 
+def calculate_time_series(df: pl.DataFrame) -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
+    time_buckets = {
+        "hour": "1h",
+        "day": "1d",
+        "week": "1w",
+        "month": "1mo",
+    }
+    case_starts = (
+        df.group_by("case_id")
+          .agg(pl.col("timestamp").min().alias("start_time"))
+    )
+
+    result = {}
+    for bucket_name, every in time_buckets.items():
+        started_cases = (
+            case_starts.with_columns(
+                pl.col("start_time").dt.truncate(every).alias("bucket")
+            )
+            .group_by("bucket")
+            .agg(pl.count().alias("started_cases_count"))
+            .sort("bucket")
+        )
+        events = (
+            df.with_columns(
+                pl.col("timestamp").dt.truncate(every).alias("bucket")
+            )
+            .group_by("bucket")
+            .agg(pl.count().alias("events_count"))
+            .sort("bucket")
+        )
+
+        result[bucket_name] = {
+            "cases_over_time": [
+                {
+                    "bucket": str(row["bucket"]),
+                    "started_cases_count": row["started_cases_count"],
+                }
+                for row in started_cases.iter_rows(named=True)
+            ],
+            "events_over_time": [
+                {
+                    "bucket": str(row["bucket"]),
+                    "events_count": row["events_count"],
+                }
+                for row in events.iter_rows(named=True)
+            ],
+        }
+
+    return result
+
+
 def calculate_summary(dataset_path: str) -> Dict[str, Any]:
     df = pl.read_parquet(dataset_path).select(["case_id", "event_name", "timestamp"])
 
@@ -273,4 +324,5 @@ def calculate_summary(dataset_path: str) -> Dict[str, Any]:
         "max_timestamp": str(max_timestamp),
         "avg_case_duration_seconds": round(avg_case_duration_seconds, 2),
         "median_case_duration_seconds": round(median_case_duration_seconds, 2),
+        "time_series": calculate_time_series(df),
     }
